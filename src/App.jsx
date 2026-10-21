@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './features/auth/LoginPage';
 import MainLayout from './components/layout/MainLayout';
@@ -26,7 +26,10 @@ function ContenidoPrincipal() {
   const [cargandoInicial, setCargandoInicial] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
 
-  const cargarTodo = async (esPrimeraCarga = false) => {
+  const ultimoUserId = useRef(null);
+
+  // Función optimizada para recargar datos y refrescar la interfaz al instante
+  const cargarTodo = useCallback(async (esPrimeraCarga = false) => {
     if (!user) return;
     if (esPrimeraCarga) setCargandoInicial(true);
     else setSincronizando(true);
@@ -39,29 +42,35 @@ function ContenidoPrincipal() {
           obtenerTodosLosHabitantes(),
           obtenerMovimientos(),
         ]);
+      
       setCalles(listaCalles || []);
       setFamilias(listaFamilias || []);
       setHabitantes(listaHabitantes || []);
       setMovimientos(listaMovimientos || []);
     } catch (err) {
-      console.error('Error cargando datos del censo:', err.message);
+      console.error('Error cargando datos de la comunidad:', err.message);
     } finally {
       setCargandoInicial(false);
       setSincronizando(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
-    if (user) {
-      cargarTodo(true);
+    if (user?.id) {
+      if (ultimoUserId.current !== user.id) {
+        ultimoUserId.current = user.id;
+        cargarTodo(true);
+      }
+    } else {
+      ultimoUserId.current = null;
     }
-  }, [user]);
+  }, [user?.id, cargarTodo]);
 
   if (loading || (user && cargandoInicial)) {
     return (
       <LoaderComunal
         pantallaCompleta={true}
-        texto="Sincronizando Censo y Estadísticas del Consejo Comunal..."
+        texto="Cargando datos de la comunidad..."
       />
     );
   }
@@ -81,7 +90,7 @@ function ContenidoPrincipal() {
         {sincronizando && (
           <LoaderComunal
             pantallaCompleta={false}
-            texto="Actualizando datos de la comunidad..."
+            texto="Actualizando información..."
           />
         )}
 

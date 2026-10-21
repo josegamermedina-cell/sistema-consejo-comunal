@@ -3,19 +3,19 @@ import { supabase } from '../lib/supabaseClient';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar sesión actual al abrir la página
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Escuchar cambios de login o logout
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
@@ -24,20 +24,43 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const iniciarSesion = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
     return data;
   };
 
   const cerrarSesion = async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  const actualizarCredenciales = async ({ email, password }) => {
+    const cambios = {};
+    if (email && email.trim() !== '') cambios.email = email.trim();
+    if (password && password !== '') cambios.password = password;
+
+    const { data, error } = await supabase.auth.updateUser(cambios);
+    if (error) throw error;
+    if (data?.user) setUser(data.user);
+    return data;
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, iniciarSesion, cerrarSesion }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        iniciarSesion,
+        cerrarSesion,
+        actualizarCredenciales,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 export const useAuth = () => useContext(AuthContext);

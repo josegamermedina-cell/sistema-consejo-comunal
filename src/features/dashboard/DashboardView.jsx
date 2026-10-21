@@ -1,395 +1,478 @@
 import { useState } from 'react';
 import {
-  calcularEdad,
-  obtenerResumenEstadistico,
-} from '../../utils/calculosDemograficos';
-import { eliminarHabitante } from '../../services/censoService';
-import {
   Home,
   Users,
   Gift,
-  Award,
-  CheckCircle2,
   ArrowUpRight,
-  Trash2,
-  FolderKanban,
+  Plus,
+  FileSpreadsheet,
+  MapPin,
+  UserCheck,
+  Search,
+  X,
+  CheckCircle2,
 } from 'lucide-react';
+import { calcularEdad } from '../../utils/calculosDemograficos';
+
+/**
+ * ESPACIOS DE IMÁGENES PARA CADA BLOQUE DEL PANEL PRINCIPAL.
+ * Puedes colocar imágenes diferentes en la carpeta "public/" y cambiar aquí sus nombres:
+ */
+const IMAGENES_DASHBOARD = {
+  cardFamilias: '/registro.png',
+  cardHabitantes: '/logins.jpg',
+  cardBeneficios: '/registro.png',
+  resumenComunal: '/logins.jpg',
+  estadoVacioFamilias: '/registro.png',
+};
 
 export default function DashboardView({
-  habitantes,
-  familias,
+  habitantes = [],
+  familias = [],
   calles = [],
   busquedaGlobal = '',
   irACalles,
-  recargarDatos,
 }) {
-  const [filtroGrupo, setFiltroGrupo] = useState('todos');
+  // Buscador propio de la tabla inferior (funciona en conjunto con el buscador de arriba)
+  const [busquedaTabla, setBusquedaTabla] = useState('');
+  const [filtroCalle, setFiltroCalle] = useState('TODAS');
 
-  const resumen = obtenerResumenEstadistico(habitantes, familias);
-  const habitantesActivos = habitantes.filter((h) => h.estado === 'activo');
+  const totalFamilias = familias.length;
+  const totalHabitantes = habitantes.length;
+  const totalConBeneficios = habitantes.filter(
+    (h) => Array.isArray(h.beneficios) && h.beneficios.length > 0
+  ).length;
 
-  const habitantesFiltrados = habitantesActivos.filter((p) => {
-    const texto =
-      `${p.nombres} ${p.apellidos} ${p.cedula || ''} ${p.detalle_patologia || ''} ${p.detalle_beneficio || ''} ${p.familias?.calles?.nombre || ''}`
-        .toLowerCase();
+  // Une lo que se escriba en el buscador de arriba o en el buscador de abajo
+  const textoBusqueda = (busquedaTabla || busquedaGlobal).trim().toLowerCase();
 
-    if (busquedaGlobal && !texto.includes(busquedaGlobal.toLowerCase())) {
+  // Filtra los habitantes según el texto buscado y la calle seleccionada
+  const habitantesFiltrados = habitantes.filter((h) => {
+    const nombreCalle = h.familias?.calles?.nombre || '';
+    if (filtroCalle !== 'TODAS' && nombreCalle !== filtroCalle) {
       return false;
     }
 
-    if (filtroGrupo === 'beneficios') {
-      return p.recibe_beneficio;
-    }
-    return true;
+    if (!textoBusqueda) return true;
+
+    const nombreCompleto = `${h.nombres || ''} ${h.apellidos || ''}`.toLowerCase();
+    const cedula = (h.cedula || '').toLowerCase();
+    const calle = nombreCalle.toLowerCase();
+    const casa = (h.familias?.numero_casa || '').toLowerCase();
+    const salud = (h.condicion_salud || '').toLowerCase();
+    const beneficios = Array.isArray(h.beneficios)
+      ? h.beneficios.join(' ').toLowerCase()
+      : '';
+
+    return (
+      nombreCompleto.includes(textoBusqueda) ||
+      cedula.includes(textoBusqueda) ||
+      calle.includes(textoBusqueda) ||
+      casa.includes(textoBusqueda) ||
+      salud.includes(textoBusqueda) ||
+      beneficios.includes(textoBusqueda)
+    );
   });
 
-  // SOLO 3 TARJETAS SUPERIORES (Las demás están en Distribución Demográfica)
-  const tarjetasPrincipales = [
-    {
-      id: 'todos',
-      valor: resumen.totalFamilias,
-      titulo: 'Total Familias',
-      detalle: 'Viviendas censadas en la comunidad',
-      icono: Home,
-      colorIcono: 'bg-indigo-700 shadow-indigo-700/30',
-    },
-    {
-      id: 'todos',
-      valor: resumen.totalHabitantes,
-      titulo: 'Total Habitantes',
-      detalle: 'Personas activas registradas',
-      icono: Users,
-      colorIcono: 'bg-violet-700 shadow-violet-700/30',
-    },
-    {
-      id: 'beneficios',
-      valor: resumen.conBeneficios,
-      titulo: 'Reciben Beneficios',
-      detalle: 'CLAP • Bonos de la Patria • Gas Comunal',
-      icono: Gift,
-      colorIcono: 'bg-emerald-600 shadow-emerald-600/30',
-    },
-  ];
+  // También filtra las tarjetas de Jefes de Casa cuando se busca algo
+  const familiasFiltradas = familias.filter((fam) => {
+    if (!textoBusqueda) return true;
+    const jefe =
+      (fam.habitantes || []).find((h) => h.es_jefe_familia) ||
+      (fam.habitantes || [])[0];
+    const nombreJefe = jefe
+      ? `${jefe.nombres || ''} ${jefe.apellidos || ''} ${jefe.cedula || ''}`.toLowerCase()
+      : '';
+    const nombreFam = (fam.nombre_familia || '').toLowerCase();
+    const calle = (fam.calles?.nombre || '').toLowerCase();
+    const casa = (fam.numero_casa || '').toLowerCase();
 
-  const handleEliminarDesdeDashboard = async (persona) => {
-    if (
-      window.confirm(
-        `¿Seguro que deseas eliminar del censo a ${persona.nombres} ${persona.apellidos}?`
-      )
-    ) {
-      await eliminarHabitante(persona.id);
-      if (recargarDatos) recargarDatos();
-    }
-  };
+    return (
+      nombreJefe.includes(textoBusqueda) ||
+      nombreFam.includes(textoBusqueda) ||
+      calle.includes(textoBusqueda) ||
+      casa.includes(textoBusqueda)
+    );
+  });
+
+  const familiasRecientes = familiasFiltradas.slice(0, 4);
 
   return (
     <div className="space-y-6">
-      {/* FILA 1: SOLO 3 CUADROS DESTACADOS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {tarjetasPrincipales.map((card, index) => {
-          const Icon = card.icono;
-          const activa = filtroGrupo === card.id && card.id !== 'todos';
-          return (
-            <div
-              key={index}
-              onClick={() => setFiltroGrupo(card.id)}
-              className={`bg-[#E8EEF7] rounded-3xl p-6 flex items-center justify-between shadow-md hover:shadow-lg transition cursor-pointer border-2 ${
-                activa
-                  ? 'border-indigo-700 ring-4 ring-indigo-500/20'
-                  : 'border-indigo-200/90'
-              }`}
+      {/* AVISO VERDE CUANDO HAY UNA BÚSQUEDA ACTIVA */}
+      {textoBusqueda && (
+        <div className="p-4 bg-emerald-100 border-2 border-emerald-500 text-emerald-950 rounded-2xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 size={20} className="text-emerald-700 shrink-0" />
+            <p className="text-sm font-extrabold">
+              Mostrando resultados para: <span className="underline">&ldquo;{busquedaTabla || busquedaGlobal}&rdquo;</span> ({habitantesFiltrados.length} vecinos encontrados)
+            </p>
+          </div>
+          {busquedaTabla && (
+            <button
+              onClick={() => setBusquedaTabla('')}
+              className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
             >
-              <div>
-                <div className="text-4xl font-black text-slate-900">
-                  {card.valor}
-                </div>
-                <p className="text-base font-extrabold text-indigo-950 mt-1">
-                  {card.titulo}
-                </p>
-                <p className="text-xs font-semibold text-slate-600 mt-0.5">
-                  {card.detalle}
-                </p>
-              </div>
-              <div
-                className={`w-16 h-16 rounded-2xl ${card.colorIcono} text-white flex items-center justify-center shadow-lg shrink-0`}
-              >
-                <Icon size={30} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              Ver todos
+            </button>
+          )}
+        </div>
+      )}
 
-      {/* FILA 2: Jefes de Casa + Tarjeta Consejo Comunal */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#E8EEF7] rounded-3xl p-6 shadow-md border-2 border-indigo-200/90">
-          <div className="flex items-center justify-between mb-5 border-b border-indigo-200 pb-3">
-            <div>
-              <h3 className="text-lg font-extrabold text-indigo-950">
-                Jefes de Casa Censados Recientemente
-              </h3>
-              <p className="text-xs font-semibold text-slate-600">
-                Núcleos familiares activos por calle
-              </p>
-            </div>
-            {irACalles && (
-              <button
-                onClick={irACalles}
-                className="px-4 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <span>Ir al CRUD de Familias</span>
-                <ArrowUpRight size={15} />
-              </button>
-            )}
+      {/* 1. TARJETAS SUPERIORES CON TIPOGRAFÍA MÁS GRANDE */}
+      <div className="grid grid-cols-3 gap-5">
+        {/* Tarjeta 1: Total Familias */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
+              <Home size={14} /> Hogares
+            </span>
+            <h3 className="text-4xl font-black text-slate-900 mt-2.5 leading-none">
+              {totalFamilias}
+            </h3>
+            <p className="text-base font-extrabold text-slate-800 mt-1.5">
+              Total Familias
+            </p>
+            <p className="text-xs text-slate-500 font-semibold mt-0.5">
+              Casas registradas en la comunidad
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {familias.filter((f) => f.activo).length === 0 ? (
-              <div className="col-span-2 bg-[#DCE4F2] border-2 border-dashed border-indigo-300 rounded-2xl p-8 text-center">
-                <p className="text-sm font-bold text-indigo-900">
-                  Aún no hay familias registradas.
-                </p>
-                <p className="text-xs text-slate-600 mt-1">
-                  Usa el botón "Ir al CRUD de Familias" para registrar el primer Jefe de Casa.
-                </p>
-              </div>
-            ) : (
-              familias
-                .filter((f) => f.activo)
-                .slice(0, 6)
-                .map((fam) => {
-                  const integrantesActivos = (fam.habitantes || []).filter(
-                    (h) => h.estado === 'activo'
-                  );
-                  const jefe =
-                    integrantesActivos.find((h) => h.es_jefe_familia) ||
-                    integrantesActivos[0];
-                  const iniciales = jefe
-                    ? `${jefe.nombres?.[0] || ''}${jefe.apellidos?.[0] || ''}`
-                    : 'JC';
-
-                  return (
-                    <div
-                      key={fam.id}
-                      className="flex items-center justify-between p-4 rounded-2xl bg-[#DCE4F2] hover:bg-indigo-200/60 transition border-2 border-indigo-200"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-indigo-700 text-white font-extrabold text-sm flex items-center justify-center shrink-0 shadow">
-                          {iniciales.toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-extrabold text-slate-900 leading-tight">
-                            {jefe
-                              ? `${jefe.nombres} ${jefe.apellidos}`
-                              : fam.nombre_familia}
-                          </p>
-                          <p className="text-xs font-bold text-indigo-800 mt-0.5">
-                            {fam.calles?.nombre} • Casa #{fam.numero_casa}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 rounded-xl bg-indigo-900 text-white font-extrabold text-xs">
-                          {integrantesActivos.length} hab.
-                        </span>
-                        <CheckCircle2 size={18} className="text-emerald-600" />
-                      </div>
-                    </div>
-                  );
-                })
-            )}
+          <div className="w-22 h-22 rounded-2xl bg-gradient-to-br from-indigo-50 to-[#EFD0ED]/50 border border-indigo-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+            <img
+              src={IMAGENES_DASHBOARD.cardFamilias}
+              alt="Familias"
+              className="w-full h-full object-contain rounded-xl"
+            />
           </div>
         </div>
 
-        {/* Tarjeta Destacada */}
-        <div className="bg-gradient-to-br from-indigo-800 via-indigo-900 to-violet-950 rounded-3xl p-6 text-white shadow-xl flex flex-col justify-between border border-indigo-400/30">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-200">
-              Resumen Comunal
+        {/* Tarjeta 2: Total Habitantes */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-purple-600 bg-purple-50 px-3 py-1 rounded-lg">
+              <Users size={14} /> Vecinos
             </span>
-            <span className="text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1 rounded-full">
+            <h3 className="text-4xl font-black text-slate-900 mt-2.5 leading-none">
+              {totalHabitantes}
+            </h3>
+            <p className="text-base font-extrabold text-slate-800 mt-1.5">
+              Total Habitantes
+            </p>
+            <p className="text-xs text-slate-500 font-semibold mt-0.5">
+              Personas anotadas en el sector
+            </p>
+          </div>
+
+          <div className="w-22 h-22 rounded-2xl bg-gradient-to-br from-purple-50 to-[#EFD0ED]/60 border border-purple-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+            <img
+              src={IMAGENES_DASHBOARD.cardHabitantes}
+              alt="Habitantes"
+              className="w-full h-full object-contain rounded-xl"
+            />
+          </div>
+        </div>
+
+        {/* Tarjeta 3: Reciben Beneficios */}
+        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
+          <div>
+            <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
+              <Gift size={14} /> Ayudas y Entregas
+            </span>
+            <h3 className="text-4xl font-black text-slate-900 mt-2.5 leading-none">
+              {totalConBeneficios}
+            </h3>
+            <p className="text-base font-extrabold text-slate-800 mt-1.5">
+              Reciben Beneficios
+            </p>
+            <p className="text-xs text-slate-500 font-semibold mt-0.5">
+              Alimentación • Bonos • Gas Comunal
+            </p>
+          </div>
+
+          <div className="w-22 h-22 rounded-2xl bg-gradient-to-br from-blue-50 to-[#EFD0ED]/50 border border-blue-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+            <img
+              src={IMAGENES_DASHBOARD.cardBeneficios}
+              alt="Beneficios"
+              className="w-full h-full object-contain rounded-xl"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 2. FILA CENTRAL: JEFES DE CASA + TARJETA DE RESUMEN COMUNAL */}
+      <div className="grid grid-cols-3 gap-5">
+        {/* Columna Izquierda (2/3): Jefes de Casa Registrados */}
+        <div className="col-span-2 bg-white rounded-[28px] p-6 shadow-sm border border-indigo-100/80 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">
+                Jefes de Casa Registrados Recientemente
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                Familias anotadas en cada calle de la comunidad
+              </p>
+            </div>
+
+            <button
+              onClick={irACalles}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer"
+            >
+              <span>Ver y Registrar Familias</span>
+              <ArrowUpRight size={16} />
+            </button>
+          </div>
+
+          {familiasRecientes.length === 0 ? (
+            <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-[#EFD0ED]/25 p-6 flex items-center justify-center gap-5">
+              <div className="w-18 h-18 rounded-2xl bg-white p-3 shadow-sm border border-indigo-100 shrink-0 flex items-center justify-center">
+                <img
+                  src={IMAGENES_DASHBOARD.estadoVacioFamilias}
+                  alt="Sin registros"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-base font-black text-indigo-950">
+                  Todavía no hay familias registradas.
+                </p>
+                <p className="text-sm text-slate-600 font-medium mt-1">
+                  Haz clic en el botón &ldquo;Ver y Registrar Familias&rdquo; para anotar al primer Jefe de Casa.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 my-auto">
+              {familiasRecientes.map((fam) => {
+                const jefe =
+                  (fam.habitantes || []).find((h) => h.es_jefe_familia) ||
+                  (fam.habitantes || [])[0];
+                return (
+                  <div
+                    key={fam.id}
+                    className="p-4 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/60 border border-slate-200 flex items-center justify-between transition"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0">
+                        <UserCheck size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-900 truncate">
+                          {jefe
+                            ? `${jefe.nombres} ${jefe.apellidos}`
+                            : fam.nombre_familia || 'Familia registrada'}
+                        </p>
+                        <p className="text-xs text-indigo-600 font-bold truncate flex items-center gap-1 mt-0.5">
+                          <MapPin size={13} />
+                          {fam.calles?.nombre || 'Calle'} • Casa {fam.numero_casa || 'S/N'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 rounded-lg bg-white border border-indigo-100 text-xs font-black text-indigo-700 shrink-0">
+                      {(fam.habitantes || []).length} integrantes
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Columna Derecha (1/3): RESUMEN COMUNAL */}
+        <div
+          className="rounded-[28px] p-6 text-white shadow-lg flex flex-col justify-between relative overflow-hidden border border-white/60"
+          style={{
+            background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #EFD0ED 100%)',
+          }}
+        >
+          <div className="flex items-center justify-between relative z-10">
+            <span className="text-xs font-black uppercase tracking-widest text-indigo-100">
+              RESUMEN COMUNAL
+            </span>
+            <span className="px-3 py-1 rounded-full bg-emerald-500 text-xs font-black text-white shadow-sm">
               Activo
             </span>
           </div>
 
-          <div className="flex flex-col items-center text-center my-5">
-            <div className="w-20 h-20 rounded-3xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center mb-3 shadow-inner">
-              <Award size={40} className="text-white" />
+          <div className="my-4 flex flex-col items-center text-center relative z-10">
+            <div className="w-30 h-24 rounded-2xl bg-white/95 backdrop-blur-md p-2.5 shadow-md border border-white flex items-center justify-center overflow-hidden mb-3">
+              <img
+                src={IMAGENES_DASHBOARD.resumenComunal}
+                alt="Resumen Comunal"
+                className="w-full h-full object-contain rounded-xl"
+              />
             </div>
-            <h4 className="text-lg font-extrabold">Consejo Comunal</h4>
-            <p className="text-xs text-indigo-200 mt-0.5">
-              Control de Calles y Núcleos Familiares
+            <h3 className="text-lg font-black text-slate-900 drop-shadow-sm">
+              Comuna Activa
+            </h3>
+            <p className="text-xs font-bold text-slate-800 mt-0.5">
+              Organización de Calles y Familias
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 pt-2">
-            <div className="bg-[#E8EEF7] text-slate-900 rounded-2xl p-2.5 text-center shadow-md">
-              <p className="text-[10px] font-extrabold text-slate-500 uppercase">
-                Calles
-              </p>
-              <p className="text-lg font-black text-indigo-800">{calles.length}</p>
+          <div className="grid grid-cols-3 gap-2.5 relative z-10">
+            <div className="bg-white/95 rounded-2xl p-3 text-center shadow-sm">
+              <span className="block text-[10px] font-black uppercase text-slate-500">
+                CALLES
+              </span>
+              <span className="text-lg font-black text-indigo-700">
+                {calles.length}
+              </span>
             </div>
-            <div className="bg-[#E8EEF7] text-slate-900 rounded-2xl p-2.5 text-center shadow-md">
-              <p className="text-[10px] font-extrabold text-slate-500 uppercase">
-                Casas
-              </p>
-              <p className="text-lg font-black text-indigo-800">
-                {resumen.totalFamilias}
-              </p>
+            <div className="bg-white/95 rounded-2xl p-3 text-center shadow-sm">
+              <span className="block text-[10px] font-black uppercase text-slate-500">
+                CASAS
+              </span>
+              <span className="text-lg font-black text-indigo-700">
+                {totalFamilias}
+              </span>
             </div>
-            <div className="bg-[#E8EEF7] text-slate-900 rounded-2xl p-2.5 text-center shadow-md">
-              <p className="text-[10px] font-extrabold text-slate-500 uppercase">
-                Beneficios
-              </p>
-              <p className="text-lg font-black text-indigo-800">
-                {resumen.conBeneficios}
-              </p>
+            <div className="bg-white/95 rounded-2xl p-3 text-center shadow-sm">
+              <span className="block text-[10px] font-black uppercase text-slate-500">
+                AYUDAS
+              </span>
+              <span className="text-lg font-black text-indigo-700">
+                {totalConBeneficios}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* FILA 3: CRUD / PADRÓN GENERAL DE ALTA VISIBILIDAD */}
-      <div className="bg-[#E8EEF7] rounded-3xl p-6 shadow-lg border-2 border-indigo-300">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-2xl bg-indigo-900 text-white">
-              <FolderKanban size={22} />
+      {/* 3. LISTA GENERAL DE VECINOS CON BUSCADOR FUNCIONAL INTEGRADO */}
+      <div className="bg-white rounded-[28px] p-6 shadow-sm border border-indigo-100/80">
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div className="flex items-center gap-3.5">
+            <div
+              className="w-11 h-11 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+              }}
+            >
+              <FileSpreadsheet size={20} />
             </div>
             <div>
-              <h3 className="text-lg font-black text-indigo-950">
-                Padrón General y Gestión de Habitantes ({habitantesFiltrados.length} registros)
-              </h3>
-              <p className="text-xs font-bold text-slate-600">
-                Vista de alto contraste de todos los Jefes de Casa y cargas familiares
+              <h2 className="text-lg font-black text-slate-900">
+                Lista General de Vecinos ({habitantesFiltrados.length} personas)
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                Todos los Jefes de Casa y familiares registrados en la comunidad
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {filtroGrupo !== 'todos' && (
+          <button
+            onClick={irACalles}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer shrink-0"
+          >
+            <Plus size={16} />
+            <span>Agregar o Editar en Calles</span>
+          </button>
+        </div>
+
+        {/* BUSCADOR INFERIOR Y FILTRO POR CALLE 100% FUNCIONALES */}
+        <div className="flex items-center gap-4 mb-5 bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-100">
+          <div className="relative flex-1">
+            <Search size={18} className="absolute left-4 top-3.5 text-indigo-500" />
+            <input
+              type="text"
+              value={busquedaTabla}
+              onChange={(e) => setBusquedaTabla(e.target.value)}
+              placeholder="Escribe aquí para buscar vecino por nombre, apellido, cédula, calle, casa o beneficio..."
+              className="w-full bg-white border border-indigo-200 rounded-xl pl-11 pr-10 py-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 transition"
+            />
+            {busquedaTabla && (
               <button
-                onClick={() => setFiltroGrupo('todos')}
-                className="text-xs font-extrabold bg-indigo-200 hover:bg-indigo-300 text-indigo-950 px-4 py-2 rounded-xl cursor-pointer"
+                onClick={() => setBusquedaTabla('')}
+                className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-700 cursor-pointer"
               >
-                Ver Todos
-              </button>
-            )}
-            {irACalles && (
-              <button
-                onClick={irACalles}
-                className="text-xs font-extrabold bg-indigo-700 hover:bg-indigo-800 text-white px-4 py-2.5 rounded-xl shadow cursor-pointer"
-              >
-                + Registrar o Editar en Calles
+                <X size={18} />
               </button>
             )}
           </div>
+
+          <select
+            value={filtroCalle}
+            onChange={(e) => setFiltroCalle(e.target.value)}
+            className="bg-white border border-indigo-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:border-indigo-600 cursor-pointer"
+          >
+            <option value="TODAS">Todas las calles ({calles.length})</option>
+            {calles.map((c) => (
+              <option key={c.id} value={c.nombre}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border-2 border-indigo-300 shadow-inner">
-          <table className="w-full text-left border-collapse text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-indigo-100">
+          <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-indigo-900 text-white text-xs uppercase tracking-wider">
-                <th className="py-3.5 px-4 font-extrabold">Habitante / Rol</th>
-                <th className="py-3.5 px-4 font-extrabold">Cédula</th>
-                <th className="py-3.5 px-4 font-extrabold">Edad / Sexo</th>
-                <th className="py-3.5 px-4 font-extrabold">Calle y Casa</th>
-                <th className="py-3.5 px-4 font-extrabold">Salud / Condición</th>
-                <th className="py-3.5 px-4 font-extrabold">Beneficios</th>
-                <th className="py-3.5 px-4 font-extrabold text-right">Acciones CRUD</th>
+              <tr
+                className="text-white text-xs font-black uppercase tracking-wider"
+                style={{
+                  background: 'linear-gradient(90deg, #1d4ed8 0%, #4f46e5 60%, #7e22ce 100%)',
+                }}
+              >
+                <th className="py-4 px-4">Vecino / Parentesco</th>
+                <th className="py-4 px-4">Cédula</th>
+                <th className="py-4 px-4">Edad y Sexo</th>
+                <th className="py-4 px-4">Calle y Casa</th>
+                <th className="py-4 px-4">Estado de Salud</th>
+                <th className="py-4 px-4">Beneficios que Recibe</th>
               </tr>
             </thead>
-            <tbody className="divide-y-2 divide-indigo-200">
+            <tbody className="divide-y divide-slate-100 text-sm">
               {habitantesFiltrados.length === 0 ? (
-                <tr className="bg-[#DCE4F2]">
-                  <td
-                    colSpan="7"
-                    className="text-center py-10 text-indigo-950 font-extrabold text-sm"
-                  >
-                    No hay habitantes registrados todavía. Ve a "Calles y Familias" para agregar datos.
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-600 font-bold text-sm">
+                    {textoBusqueda || filtroCalle !== 'TODAS'
+                      ? 'No se encontraron vecinos con esa búsqueda. Prueba con otro nombre o cédula.'
+                      : 'Todavía no hay vecinos registrados. Ve a la sección "Calles y Familias" para agregar datos.'}
                   </td>
                 </tr>
               ) : (
-                habitantesFiltrados.map((h, idx) => {
+                habitantesFiltrados.map((h) => {
                   const edad = calcularEdad(h.fecha_nacimiento);
-                  const filaPar = idx % 2 === 0;
                   return (
-                    <tr
-                      key={h.id}
-                      className={`${
-                        filaPar ? 'bg-[#DCE4F2]' : 'bg-[#CFD9EC]'
-                      } hover:bg-indigo-200/80 transition`}
-                    >
-                      <td className="py-3.5 px-4">
-                        <p className="font-extrabold text-slate-900 text-sm">
-                          {h.nombres} {h.apellidos}
-                        </p>
-                        <span
-                          className={`inline-block mt-0.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold ${
-                            h.es_jefe_familia
-                              ? 'bg-indigo-700 text-white'
-                              : 'bg-slate-700 text-white'
-                          }`}
-                        >
-                          {h.parentesco}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-extrabold text-slate-800">
-                        {h.cedula || 'Sin C.I.'}
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">
-                        {edad} años ({h.sexo === 'M' ? 'Hombre' : 'Mujer'})
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-indigo-950">
-                        {h.familias?.calles?.nombre || 'Calle'} • Casa #
-                        {h.familias?.numero_casa}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        {h.embarazada && (
-                          <span className="inline-block px-2.5 py-1 rounded-lg bg-pink-600 text-white font-extrabold text-xs mr-1">
-                            Embarazada ({h.semanas_embarazo || '?'} sem)
+                    <tr key={h.id} className="hover:bg-indigo-50/40 transition">
+                      <td className="py-3.5 px-4 font-extrabold text-slate-900">
+                        {h.nombres} {h.apellidos}
+                        {h.es_jefe_familia && (
+                          <span className="ml-2 px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-xs font-black">
+                            Jefe de Casa
                           </span>
                         )}
-                        {h.tiene_patologia ? (
-                          <span className="inline-block px-2.5 py-1 rounded-lg bg-rose-600 text-white font-extrabold text-xs">
-                            {h.detalle_patologia}
-                          </span>
-                        ) : (
-                          !h.embarazada && (
-                            <span className="px-2.5 py-1 rounded-lg bg-slate-300 text-slate-800 font-bold text-xs">
-                              Sano
-                            </span>
-                          )
-                        )}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-700">
+                        {h.cedula || 'Sin cédula'}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-700">
+                        {edad !== null ? `${edad} años` : '-'} • {h.sexo || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-700">
+                        {h.familias?.calles?.nombre || '-'} (Casa {h.familias?.numero_casa || 'S/N'})
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-700">
+                        {h.condicion_salud || 'Sano'}
                       </td>
                       <td className="py-3.5 px-4">
-                        {h.recibe_beneficio ? (
-                          <span className="inline-block px-3 py-1 rounded-lg bg-emerald-700 text-white font-extrabold text-xs">
-                            {h.detalle_beneficio}
-                          </span>
+                        {Array.isArray(h.beneficios) && h.beneficios.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {h.beneficios.map((b, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold"
+                              >
+                                {b}
+                              </span>
+                            ))}
+                          </div>
                         ) : (
-                          <span className="text-xs font-bold text-slate-600">
+                          <span className="text-slate-400 text-xs font-semibold">
                             Ninguno
                           </span>
                         )}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={irACalles}
-                            className="px-3 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-extrabold cursor-pointer"
-                          >
-                            Gestionar
-                          </button>
-                          <button
-                            onClick={() => handleEliminarDesdeDashboard(h)}
-                            className="p-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white cursor-pointer"
-                            title="Eliminar registro"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   );

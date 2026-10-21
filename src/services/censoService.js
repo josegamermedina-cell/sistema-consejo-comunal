@@ -1,222 +1,152 @@
 import { supabase } from '../lib/supabaseClient';
 
-// Validar si una cédula ya está registrada en la comunidad
-export const verificarCedulaDuplicada = async (cedula, idExcluir = null) => {
-  if (!cedula || !cedula.trim()) return false;
-  let query = supabase
-    .from('habitantes')
-    .select('id, nombres, apellidos')
-    .eq('cedula', cedula.trim());
-
-  if (idExcluir) {
-    query = query.neq('id', idExcluir);
-  }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data && data.length > 0 ? data[0] : false;
-};
-
-// 1. Obtener todas las calles
-export const obtenerCalles = async () => {
+export async function obtenerCalles() {
+  console.log('🔄 Consultando calles en Supabase...');
   const { data, error } = await supabase
     .from('calles')
     .select('*')
-    .order('nombre', { ascending: true });
-  if (error) throw error;
-  return data;
-};
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error('❌ Error al obtener calles:', error.message);
+    throw error;
+  }
+  console.log('✅ Calles obtenidas de Supabase:', data);
+  return data || [];
+}
 
-// 2. Crear una nueva calle
-export const crearCalle = async (nuevaCalle) => {
+export async function crearCalle(calle) {
+  console.log('📤 Intentando guardar calle en Supabase:', calle);
   const { data, error } = await supabase
     .from('calles')
-    .insert([nuevaCalle])
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-};
+    .insert([calle])
+    .select();
+  
+  if (error) {
+    console.error('❌ Error al insertar calle:', error.message);
+    throw error;
+  }
+  console.log('✅ Calle guardada con éxito en Supabase:', data);
+  return data ? data[0] : null;
+}
 
-// 3. Obtener todas las familias con su calle y todos sus integrantes
-export const obtenerFamiliasCompletas = async () => {
+export async function eliminarCalle(calleId) {
+  const { data: familiasDeCalle } = await supabase
+    .from('familias')
+    .select('id')
+    .eq('calle_id', calleId);
+
+  if (familiasDeCalle && familiasDeCalle.length > 0) {
+    const idsFamilias = familiasDeCalle.map((f) => f.id);
+    await supabase.from('habitantes').delete().in('familia_id', idsFamilias);
+    await supabase.from('familias').delete().eq('calle_id', calleId);
+  }
+
+  const { error } = await supabase.from('calles').delete().eq('id', calleId);
+  if (error) throw error;
+  return true;
+}
+
+export async function obtenerFamiliasCompletas() {
   const { data, error } = await supabase
     .from('familias')
     .select(`
       *,
-      calles ( id, nombre, sector, lider_calle ),
-      habitantes ( * )
-    `)
-    .order('numero_casa', { ascending: true });
-  if (error) throw error;
-  return data;
-};
-
-// 4. Obtener todos los habitantes
-export const obtenerTodosLosHabitantes = async () => {
-  const { data, error } = await supabase
-    .from('habitantes')
-    .select(`
-      *,
-      familias ( numero_casa, nombre_familia, calles ( nombre ) )
+      calles (*),
+      habitantes (*)
     `)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return data;
-};
+  return data || [];
+}
 
-// 5. Registrar una nueva Familia junto con su Jefe de Casa
-export const registrarFamiliaYJefe = async (datosFamilia, datosJefe) => {
-  if (datosJefe.cedula) {
-    const duplicado = await verificarCedulaDuplicada(datosJefe.cedula);
-    if (duplicado) {
-      throw new Error(
-        `La cédula ${datosJefe.cedula} ya está registrada a nombre de ${duplicado.nombres} ${duplicado.apellidos}.`
-      );
-    }
-  }
-
-  const { data: familia, error: errorFamilia } = await supabase
+export async function crearFamiliaConJefe(familiaData, jefeData) {
+  const { data: famData, error: famError } = await supabase
     .from('familias')
-    .insert([datosFamilia])
-    .select()
-    .single();
+    .insert([familiaData])
+    .select();
+  if (famError) throw famError;
 
-  if (errorFamilia) throw errorFamilia;
+  const nuevaFamiliaId = famData[0].id;
 
-  const { data: jefe, error: errorJefe } = await supabase
-    .from('habitantes')
-    .insert([
-      {
-        ...datosJefe,
-        familia_id: familia.id,
-        es_jefe_familia: true,
-        parentesco: 'Jefe de Casa',
-        estado: 'activo',
-      },
-    ])
-    .select()
-    .single();
-
-  if (errorJefe) throw errorJefe;
-
-  return { familia, jefe };
-};
-
-// 6. Agregar un integrante a una familia existente
-export const agregarIntegrante = async (
-  datosIntegrante,
-  registrarMovimiento = false,
-  motivo = 'Nuevo registro'
-) => {
-  if (datosIntegrante.cedula) {
-    const duplicado = await verificarCedulaDuplicada(datosIntegrante.cedula);
-    if (duplicado) {
-      throw new Error(
-        `La cédula ${datosIntegrante.cedula} ya pertenece a ${duplicado.nombres} ${duplicado.apellidos}.`
-      );
-    }
-  }
-
-  const { data: habitante, error } = await supabase
-    .from('habitantes')
-    .insert([{ ...datosIntegrante, estado: 'activo' }])
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  if (registrarMovimiento) {
-    await supabase.from('movimientos_comunidad').insert([
-      {
-        habitante_id: habitante.id,
-        tipo_movimiento: 'ingreso',
-        motivo,
-      },
-    ]);
-  }
-
-  return habitante;
-};
-
-// 7. Actualizar datos de cualquier habitante
-export const actualizarHabitante = async (id, cambios) => {
-  if (cambios.cedula) {
-    const duplicado = await verificarCedulaDuplicada(cambios.cedula, id);
-    if (duplicado) {
-      throw new Error(
-        `La cédula ${cambios.cedula} ya pertenece a ${duplicado.nombres} ${duplicado.apellidos}.`
-      );
-    }
-  }
-
-  const { data, error } = await supabase
-    .from('habitantes')
-    .update({ ...cambios, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-};
-
-// 8. Registrar salida o reingreso de alguien en la comunidad
-export const cambiarEstadoHabitante = async (habitanteId, nuevoEstado, motivo) => {
-  const tipoMovimiento = nuevoEstado === 'activo' ? 'reingreso' : 'salida';
-  const fechaSalida =
-    nuevoEstado === 'activo' ? null : new Date().toISOString().split('T')[0];
-
-  const { error: errorUpdate } = await supabase
-    .from('habitantes')
-    .update({
-      estado: nuevoEstado,
-      fecha_salida: fechaSalida,
-      motivo_salida: nuevoEstado === 'activo' ? null : motivo,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', habitanteId);
-
-  if (errorUpdate) throw errorUpdate;
-
-  const { error: errorMov } = await supabase.from('movimientos_comunidad').insert([
+  const { error: jefeError } = await supabase.from('habitantes').insert([
     {
-      habitante_id: habitanteId,
-      tipo_movimiento: tipoMovimiento,
-      motivo,
+      ...jefeData,
+      familia_id: nuevaFamiliaId,
+      es_jefe_familia: true,
     },
   ]);
+  if (jefeError) throw jefeError;
 
-  if (errorMov) throw errorMov;
-};
+  return famData[0];
+}
 
-// 9. Obtener historial de movimientos
-export const obtenerMovimientos = async () => {
+export async function eliminarFamilia(familiaId) {
+  await supabase.from('habitantes').delete().eq('familia_id', familiaId);
+  const { error } = await supabase.from('familias').delete().eq('id', familiaId);
+  if (error) throw error;
+  return true;
+}
+
+export async function obtenerTodosLosHabitantes() {
   const { data, error } = await supabase
-    .from('movimientos_comunidad')
+    .from('habitantes')
     .select(`
       *,
-      habitantes (
-        nombres,
-        apellidos,
-        cedula,
-        familias ( numero_casa, calles ( nombre ) )
+      familias (
+        *,
+        calles (*)
       )
     `)
     .order('created_at', { ascending: false });
-
   if (error) throw error;
-  return data;
-};
+  return data || [];
+}
 
-// 10. Eliminar un integrante de la familia
-export const eliminarHabitante = async (habitanteId) => {
-  const { error } = await supabase.from('habitantes').delete().eq('id', habitanteId);
+export async function agregarHabitante(habitante) {
+  const { data, error } = await supabase
+    .from('habitantes')
+    .insert([habitante])
+    .select();
   if (error) throw error;
-};
+  return data[0];
+}
 
-// 11. Eliminar una familia/casa completa (elimina también sus integrantes por CASCADE)
-export const eliminarFamiliaCompleta = async (familiaId) => {
-  const { error } = await supabase.from('familias').delete().eq('id', familiaId);
+export async function actualizarHabitante(id, habitante) {
+  const { data, error } = await supabase
+    .from('habitantes')
+    .update(habitante)
+    .eq('id', id)
+    .select();
   if (error) throw error;
-};
+  return data[0];
+}
+
+export async function eliminarHabitante(id) {
+  const { error } = await supabase.from('habitantes').delete().eq('id', id);
+  if (error) throw error;
+  return true;
+}
+
+export async function obtenerMovimientos() {
+  const { data, error } = await supabase
+    .from('movimientos_comunidad')
+    .select('*')
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error('Error al obtener movimientos:', error.message);
+    return [];
+  }
+  return data || [];
+}
+
+export async function cambiarEstadoHabitante(habitanteId, nuevoEstado, motivo = '') {
+  const { data, error } = await supabase
+    .from('habitantes')
+    .update({ estado: nuevoEstado, motivo_salida: motivo })
+    .eq('id', habitanteId)
+    .select();
+  if (error) throw error;
+  return data[0];
+}
