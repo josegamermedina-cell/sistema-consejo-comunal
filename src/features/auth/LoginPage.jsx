@@ -218,7 +218,7 @@ export default function LoginPage() {
               ¡Bienvenido!
             </h2>
             <p className="text-[11px] font-bold text-slate-800 uppercase tracking-[0.22em] mt-2.5">
-              ORGANIZACIÓN Y CONTROL DE TU SECTOR
+              ORGANIZACIÓN Y CONTROL DE TU SECTOR.
             </p>
           </div>
 
