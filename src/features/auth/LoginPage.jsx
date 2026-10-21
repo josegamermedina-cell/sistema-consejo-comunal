@@ -30,7 +30,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen min-w-[1280px] w-full flex items-center justify-start px-32 font-sans overflow-hidden select-none bg-slate-950">
+    <div className="relative min-h-screen min-w-[1280px] w-full flex items-center justify-start pl-24 font-sans overflow-hidden select-none bg-slate-950">
       
       {/* IMAGEN DE FONDO: Familia en la comunidad al atardecer */}
       <div
@@ -41,10 +41,10 @@ export default function LoginPage() {
       />
 
       {/* Degradado suave a la izquierda para resaltar el logo y la tarjeta */}
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/70 via-slate-900/30 to-transparent z-0" />
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 via-slate-900/35 to-transparent z-0" />
 
-      {/* CONTENEDOR PRINCIPAL FIJO (Escala idéntica de computadora) */}
-      <div className="relative z-10 w-[420px] flex flex-col">
+      {/* CONTENEDOR PRINCIPAL ALINEADO A LA IZQUIERDA (Idéntico comportamiento de escritorio) */}
+      <div className="relative z-10 w-[420px] flex flex-col my-auto">
         
         {/* 1. LOGOTIPO Y TÍTULO ARRIBA */}
         <div className="flex items-center gap-3.5 mb-6 pl-1">
