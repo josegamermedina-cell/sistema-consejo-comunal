@@ -35,14 +35,14 @@ export default function MainLayout({
       <aside className="w-76 bg-gradient-to-b from-indigo-800 via-indigo-900 to-violet-950 text-white rounded-[32px] flex flex-col justify-between p-6 shadow-2xl shrink-0 border border-indigo-400/20">
         <div>
           <div className="flex items-center gap-3.5 px-3 pt-2 pb-8">
-            <div className="p-3 bg-indigo-500/25 backdrop-blur-md rounded-2xl text-white border border-indigo-300/30 shadow-inner">
-              <Building2 size={28} />
+            <div className="w-12 h-12 bg-white/95 p-2 rounded-2xl border border-indigo-300/40 shadow-md shrink-0 flex items-center justify-center">
+              <img src="/registro.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <h2 className="font-extrabold text-xl tracking-tight text-white">
-                Comuna App
+                Comuna Activa
               </h2>
-              <p className="text-xs text-indigo-200 font-medium">Gestión Comunitaria</p>
+              <p className="text-xs text-indigo-200 font-medium">Control Comunitario</p>
             </div>
           </div>
 
