@@ -13,7 +13,6 @@ import {
   X,
   Search,
   HeartPulse,
-  Gift,
 } from 'lucide-react';
 import {
   crearCalle,
@@ -25,16 +24,17 @@ import {
   eliminarHabitante,
 } from '../../services/censoService';
 import { calcularEdad } from '../../utils/calculosDemograficos';
+import {
+  ModalNuevaCalle,
+  ModalEliminarCalle,
+} from '../../components/modales/ModalGestionCalle';
+import {
+  ModalFamilia,
+  ModalHabitante,
+} from '../../components/modales/ModalGestionFamilia';
 
-const LISTA_BENEFICIOS = [
-  'CLAP (Alimentación)',
-  'Gas Comunal',
-  'Bonos de la Patria',
-  'Hogares de la Patria',
-  'Amor Mayor (Pensión)',
-  'Parto Humanizado',
-  'José Gregorio Hernández',
-];
+const REGEX_SOLO_LETRAS = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/;
+const REGEX_SOLO_NUMEROS = /^[0-9]+$/;
 
 export default function CallesFamiliasView({
   calles = [],
@@ -45,17 +45,14 @@ export default function CallesFamiliasView({
   const [calleSeleccionada, setCalleSeleccionada] = useState('TODAS');
   const [busquedaLocal, setBusquedaLocal] = useState('');
 
-  // Estados de cuadros de alerta (Verde de éxito y Rojo de error)
   const [alertaVerde, setAlertaVerde] = useState('');
   const [alertaRoja, setAlertaRoja] = useState('');
 
-  // Ventana Nueva Calle y Confirmación de Eliminar Calle
   const [modalCalle, setModalCalle] = useState(false);
   const [nombreNuevaCalle, setNombreNuevaCalle] = useState('');
   const [sectorNuevaCalle, setSectorNuevaCalle] = useState('');
   const [calleAEliminar, setCalleAEliminar] = useState(null);
 
-  // Ventana Registrar Nueva Familia con su Jefe de Casa
   const [modalFamilia, setModalFamilia] = useState(false);
   const [formFamilia, setFormFamilia] = useState({
     calle_id: '',
@@ -71,7 +68,6 @@ export default function CallesFamiliasView({
     beneficios_jefe: [],
   });
 
-  // Ventana Agregar o Editar Familiar / Vecino
   const [modalHabitante, setModalHabitante] = useState(false);
   const [familiaActivaId, setFamiliaActivaId] = useState(null);
   const [habitanteEditandoId, setHabitanteEditandoId] = useState(null);
@@ -81,7 +77,7 @@ export default function CallesFamiliasView({
     cedula: '',
     fecha_nacimiento: '',
     sexo: 'F',
-    parentesco: 'Hijo(a)',
+    parentesco: 'Hijo',
     es_jefe_familia: false,
     condicion_salud: 'Sano',
     beneficios: [],
@@ -99,11 +95,13 @@ export default function CallesFamiliasView({
     setAlertaRoja(mensaje);
   };
 
-  // Filtrado de familias por calle seleccionada y buscador
   const textoFiltro = (busquedaLocal || busquedaGlobal).trim().toLowerCase();
 
   const familiasFiltradas = familias.filter((fam) => {
-    if (calleSeleccionada !== 'TODAS' && String(fam.calle_id) !== String(calleSeleccionada)) {
+    if (
+      calleSeleccionada !== 'TODAS' &&
+      String(fam.calle_id) !== String(calleSeleccionada)
+    ) {
       return false;
     }
     if (!textoFiltro) return true;
@@ -125,28 +123,31 @@ export default function CallesFamiliasView({
     );
   });
 
+  // 1. CREAR CALLE CON VALIDACIÓN ESTRICTA
   const handleCrearCalle = async (e) => {
     e.preventDefault();
-    if (!nombreNuevaCalle.trim()) return;
+    const nombreLimpio = nombreNuevaCalle.trim();
+    const sectorLimpio = sectorNuevaCalle.trim();
+
+    if (!nombreLimpio || nombreLimpio.length > 28 || !REGEX_SOLO_LETRAS.test(nombreLimpio)) {
+      mostrarError('El nombre de la calle solo debe contener letras y máximo 28 caracteres.');
+      return;
+    }
+
     setProcesando(true);
     try {
-      // 1. Guardamos en Supabase
       await crearCalle({
-        nombre: nombreNuevaCalle.trim(),
-        sector: sectorNuevaCalle.trim() || 'Sector Principal',
+        nombre: nombreLimpio,
+        sector: sectorLimpio || 'Sector Principal',
       });
-      
       setNombreNuevaCalle('');
       setSectorNuevaCalle('');
       setModalCalle(false);
-      
-      // 2. Recargamos todos los datos globales de la aplicación
       await recargarDatos();
-      
-      mostrarExito(`¡La calle "${nombreNuevaCalle.trim()}" fue agregada con éxito!`);
+      mostrarExito(`¡La calle "${nombreLimpio}" fue agregada con éxito!`);
     } catch (err) {
       if (err.message && err.message.includes('calles_nombre_key')) {
-        mostrarError(`La calle "${nombreNuevaCalle.trim()}" ya se encuentra registrada.`);
+        mostrarError(`La calle "${nombreLimpio}" ya se encuentra registrada.`);
       } else {
         mostrarError(err.message || 'No se pudo agregar la calle.');
       }
@@ -175,30 +176,56 @@ export default function CallesFamiliasView({
     }
   };
 
-  // 3. CREAR FAMILIA CON SU JEFE DE CASA
+  // 3. CREAR FAMILIA Y JEFE DE CASA CON VALIDACIÓN ESTRICTA
   const handleCrearFamilia = async (e) => {
     e.preventDefault();
+    const nombres = formFamilia.nombres_jefe.trim();
+    const apellidos = formFamilia.apellidos_jefe.trim();
+    const cedula = formFamilia.cedula_jefe.trim();
+    const casa = formFamilia.numero_casa.trim();
+    const telefono = formFamilia.telefono_contacto.trim();
+
     if (!formFamilia.calle_id) {
-      mostrarError('Por favor selecciona la calle donde queda la casa.');
+      mostrarError('Por favor selecciona la calle donde queda la vivienda.');
       return;
     }
+    if (!nombres || nombres.length > 28 || !REGEX_SOLO_LETRAS.test(nombres)) {
+      mostrarError('Los nombres del Jefe de Casa solo deben tener letras (máximo 28 caracteres).');
+      return;
+    }
+    if (!apellidos || apellidos.length > 28 || !REGEX_SOLO_LETRAS.test(apellidos)) {
+      mostrarError('Los apellidos del Jefe de Casa solo deben tener letras (máximo 28 caracteres).');
+      return;
+    }
+    if (!casa || !REGEX_SOLO_NUMEROS.test(casa)) {
+      mostrarError('El número de casa solo debe contener números.');
+      return;
+    }
+    if (!cedula || !REGEX_SOLO_NUMEROS.test(cedula)) {
+      mostrarError('La cédula solo debe contener números.');
+      return;
+    }
+    if (telefono && !REGEX_SOLO_NUMEROS.test(telefono)) {
+      mostrarError('El teléfono solo debe contener números.');
+      return;
+    }
+
     setProcesando(true);
     try {
       await crearFamiliaConJefe(
         {
           calle_id: formFamilia.calle_id,
-          numero_casa: formFamilia.numero_casa.trim(),
-          nombre_familia:
-            formFamilia.nombre_familia.trim() || `Familia ${formFamilia.apellidos_jefe.trim()}`,
-          telefono_contacto: formFamilia.telefono_contacto.trim(),
+          numero_casa: casa,
+          nombre_familia: `Familia ${apellidos}`.slice(0, 28),
+          telefono_contacto: telefono,
         },
         {
-          nombres: formFamilia.nombres_jefe.trim(),
-          apellidos: formFamilia.apellidos_jefe.trim(),
-          cedula: formFamilia.cedula_jefe.trim(),
+          nombres,
+          apellidos,
+          cedula,
           fecha_nacimiento: formFamilia.fecha_nacimiento_jefe,
           sexo: formFamilia.sexo_jefe,
-          parentesco: 'Jefe(a) de Casa',
+          parentesco: 'Jefe de Casa',
           es_jefe_familia: true,
           condicion_salud: formFamilia.condicion_salud_jefe.trim() || 'Sano',
           beneficios: formFamilia.beneficios_jefe,
@@ -227,11 +254,9 @@ export default function CallesFamiliasView({
     }
   };
 
-  // 4. ELIMINAR FAMILIA / CASA
+  // 4. ELIMINAR FAMILIA
   const handleEliminarFamilia = async (fam) => {
-    if (!window.confirm(`¿Deseas eliminar la Casa ${fam.numero_casa} (${fam.nombre_familia}) y sus integrantes?`)) {
-      return;
-    }
+    if (!window.confirm(`¿Deseas eliminar la Casa ${fam.numero_casa} y sus integrantes?`)) return;
     setProcesando(true);
     try {
       await eliminarFamilia(fam.id);
@@ -244,7 +269,7 @@ export default function CallesFamiliasView({
     }
   };
 
-  // 5. GUARDAR O ACTUALIZAR INTEGRANTE DE LA FAMILIA
+  // 5. AGREGAR O EDITAR INTEGRANTE CON VALIDACIÓN ESTRICTA
   const abrirModalNuevoFamiliar = (familiaId) => {
     setFamiliaActivaId(familiaId);
     setHabitanteEditandoId(null);
@@ -254,7 +279,7 @@ export default function CallesFamiliasView({
       cedula: '',
       fecha_nacimiento: '',
       sexo: 'F',
-      parentesco: 'Hijo(a)',
+      parentesco: 'Hijo',
       es_jefe_familia: false,
       condicion_salud: 'Sano',
       beneficios: [],
@@ -266,14 +291,14 @@ export default function CallesFamiliasView({
     setFamiliaActivaId(familiaId);
     setHabitanteEditandoId(hab.id);
     setFormHabitante({
-      nombres: hab.nombres || '',
-      apellidos: hab.apellidos || '',
-      cedula: hab.cedula || '',
+      nombres: (hab.nombres || '').slice(0, 28),
+      apellidos: (hab.apellidos || '').slice(0, 28),
+      cedula: (hab.cedula || '').replace(/[^0-9]/g, ''),
       fecha_nacimiento: hab.fecha_nacimiento || '',
       sexo: hab.sexo || 'F',
-      parentesco: hab.parentesco || 'Familiar',
+      parentesco: (hab.parentesco || 'Familiar').replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '').slice(0, 28),
       es_jefe_familia: Boolean(hab.es_jefe_familia),
-      condicion_salud: hab.condicion_salud || 'Sano',
+      condicion_salud: (hab.condicion_salud || 'Sano').replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '').slice(0, 28),
       beneficios: Array.isArray(hab.beneficios) ? hab.beneficios : [],
     });
     setModalHabitante(true);
@@ -281,38 +306,62 @@ export default function CallesFamiliasView({
 
   const handleGuardarHabitante = async (e) => {
     e.preventDefault();
+    const nombres = formHabitante.nombres.trim();
+    const apellidos = formHabitante.apellidos.trim();
+    const cedula = formHabitante.cedula.trim();
+
+    if (!nombres || nombres.length > 28 || !REGEX_SOLO_LETRAS.test(nombres)) {
+      mostrarError('Los nombres solo deben contener letras y máximo 28 caracteres.');
+      return;
+    }
+    if (!apellidos || apellidos.length > 28 || !REGEX_SOLO_LETRAS.test(apellidos)) {
+      mostrarError('Los apellidos solo deben contener letras y máximo 28 caracteres.');
+      return;
+    }
+    if (cedula && !REGEX_SOLO_NUMEROS.test(cedula)) {
+      mostrarError('La cédula solo debe contener números.');
+      return;
+    }
+
     setProcesando(true);
     try {
+      const datosLimpios = {
+        ...formHabitante,
+        nombres,
+        apellidos,
+        cedula,
+        parentesco: formHabitante.parentesco.trim() || 'Familiar',
+        condicion_salud: formHabitante.condicion_salud.trim() || 'Sano',
+      };
+
       if (habitanteEditandoId) {
-        await actualizarHabitante(habitanteEditandoId, formHabitante);
-        mostrarExito(`¡Los datos de ${formHabitante.nombres} se actualizaron con éxito!`);
+        await actualizarHabitante(habitanteEditandoId, datosLimpios);
+        mostrarExito(`¡Los datos de ${nombres} se actualizaron con éxito!`);
       } else {
         await agregarHabitante({
-          ...formHabitante,
+          ...datosLimpios,
           familia_id: familiaActivaId,
         });
-        mostrarExito(`¡${formHabitante.nombres} fue agregado(a) a la familia con éxito!`);
+        mostrarExito(`¡${nombres} fue agregado(a) con éxito!`);
       }
       setModalHabitante(false);
       await recargarDatos();
     } catch (err) {
-      mostrarError(err.message || 'No se pudieron guardar los datos de la persona.');
+      mostrarError(err.message || 'No se pudieron guardar los datos.');
     } finally {
       setProcesando(false);
     }
   };
 
   const handleEliminarHabitante = async (hab) => {
-    if (!window.confirm(`¿Deseas quitar a ${hab.nombres} ${hab.apellidos} de esta familia?`)) {
-      return;
-    }
+    if (!window.confirm(`¿Deseas quitar a ${hab.nombres} ${hab.apellidos}?`)) return;
     setProcesando(true);
     try {
       await eliminarHabitante(hab.id);
       await recargarDatos();
-      mostrarExito(`¡${hab.nombres} ${hab.apellidos} fue retirado(a) del registro!`);
+      mostrarExito(`¡${hab.nombres} fue retirado(a) del registro!`);
     } catch (err) {
-      mostrarError(err.message || 'No se pudo eliminar el registro.');
+      mostrarError(err.message || 'No se pudo eliminar.');
     } finally {
       setProcesando(false);
     }
@@ -336,7 +385,6 @@ export default function CallesFamiliasView({
 
   return (
     <div className="space-y-6">
-      {/* CUADRO VERDE DE CONFIRMACIÓN */}
       {alertaVerde && (
         <div className="p-4 bg-emerald-100 border-2 border-emerald-500 text-emerald-950 rounded-2xl shadow-md flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -357,7 +405,6 @@ export default function CallesFamiliasView({
         </div>
       )}
 
-      {/* CUADRO ROJO EN CASO DE ERROR */}
       {alertaRoja && (
         <div className="p-4 bg-rose-100 border-2 border-rose-400 text-rose-950 rounded-2xl shadow-md flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -373,7 +420,6 @@ export default function CallesFamiliasView({
         </div>
       )}
 
-      {/* CABECERA CLARA Y SIN PALABRAS TÉCNICAS */}
       <div className="bg-slate-50/90 border border-indigo-100 rounded-[26px] p-6 flex items-center justify-between gap-4 shadow-sm">
         <div>
           <h2 className="text-xl font-black text-slate-900">
@@ -387,7 +433,7 @@ export default function CallesFamiliasView({
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => setModalCalle(true)}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-extrabold text-indigo-700 bg-white hover:bg-indigo-50 border-2 border-indigo-200 shadow-sm transition cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-extrabold text-indigo-700 bg-white hover:bg-indigo-50 border-2 border-indigo-200 shadow-sm cursor-pointer"
           >
             <MapPin size={18} />
             <span>Agregar Calle</span>
@@ -401,11 +447,12 @@ export default function CallesFamiliasView({
               }
               setFormFamilia({
                 ...formFamilia,
-                calle_id: calleSeleccionada !== 'TODAS' ? calleSeleccionada : calles[0]?.id || '',
+                calle_id:
+                  calleSeleccionada !== 'TODAS' ? calleSeleccionada : calles[0]?.id || '',
               });
               setModalFamilia(true);
             }}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md cursor-pointer"
           >
             <Plus size={18} />
             <span>Registrar Jefe de Casa</span>
@@ -413,7 +460,6 @@ export default function CallesFamiliasView({
         </div>
       </div>
 
-      {/* BOTONES DE CALLES CON OPCIÓN PARA ELIMINAR CADA CALLE */}
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={() => setCalleSeleccionada('TODAS')}
@@ -461,7 +507,6 @@ export default function CallesFamiliasView({
         })}
       </div>
 
-      {/* BUSCADOR DE FAMILIAS Y VECINOS DENTRO DE CALLES */}
       <div className="relative">
         <Search size={18} className="absolute left-4 top-3.5 text-indigo-500" />
         <input
@@ -481,7 +526,6 @@ export default function CallesFamiliasView({
         )}
       </div>
 
-      {/* LISTADO DE CASAS Y FAMILIAS */}
       {familiasFiltradas.length === 0 ? (
         <div className="bg-white rounded-[28px] border-2 border-dashed border-indigo-100 p-12 text-center">
           <Home size={40} className="mx-auto text-indigo-400 mb-3" />
@@ -538,23 +582,21 @@ export default function CallesFamiliasView({
                   <div className="flex items-center gap-2.5">
                     <button
                       onClick={() => abrirModalNuevoFamiliar(fam.id)}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm cursor-pointer"
                     >
                       <UserPlus size={15} />
                       <span>Agregar Familiar</span>
                     </button>
-
                     <button
                       onClick={() => handleEliminarFamilia(fam)}
                       title="Eliminar vivienda"
-                      className="p-2.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-100 transition cursor-pointer"
+                      className="p-2.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-100 cursor-pointer"
                     >
                       <Trash2 size={17} />
                     </button>
                   </div>
                 </div>
 
-                {/* Tabla de integrantes de la casa */}
                 <div className="overflow-x-auto rounded-2xl border border-slate-100">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
@@ -642,496 +684,45 @@ export default function CallesFamiliasView({
         </div>
       )}
 
-      {/* VENTANA CONFIRMAR ELIMINACIÓN DE CALLE */}
-      {calleAEliminar && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-rose-100 space-y-4">
-            <div className="flex items-center gap-3 text-rose-600">
-              <div className="w-11 h-11 rounded-2xl bg-rose-100 flex items-center justify-center shrink-0">
-                <Trash2 size={22} />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900">
-                  ¿Eliminar {calleAEliminar.nombre}?
-                </h3>
-                <p className="text-xs font-semibold text-slate-500">
-                  Esta acción quitará la calle y las casas registradas en ella.
-                </p>
-              </div>
-            </div>
+      <ModalNuevaCalle
+        abierto={modalCalle}
+        onCerrar={() => setModalCalle(false)}
+        onSubmit={handleCrearCalle}
+        nombre={nombreNuevaCalle}
+        setNombre={setNombreNuevaCalle}
+        sector={sectorNuevaCalle}
+        setSector={setSectorNuevaCalle}
+        procesando={procesando}
+      />
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setCalleAEliminar(null)}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={procesando}
-                onClick={handleConfirmarEliminarCalle}
-                className="px-5 py-2.5 rounded-xl text-sm font-extrabold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 cursor-pointer"
-              >
-                {procesando ? 'Eliminando...' : 'Sí, Eliminar Calle'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModalEliminarCalle
+        calle={calleAEliminar}
+        onCerrar={() => setCalleAEliminar(null)}
+        onConfirmar={handleConfirmarEliminarCalle}
+        procesando={procesando}
+      />
 
-      {/* VENTANA AGREGAR NUEVA CALLE */}
-      {modalCalle && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-indigo-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-black text-slate-900">Agregar Nueva Calle</h3>
-              <button
-                onClick={() => setModalCalle(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
+      <ModalFamilia
+        abierto={modalFamilia}
+        onCerrar={() => setModalFamilia(false)}
+        onSubmit={handleCrearFamilia}
+        form={formFamilia}
+        setForm={setFormFamilia}
+        calles={calles}
+        procesando={procesando}
+        toggleBeneficio={toggleBeneficio}
+      />
 
-            <form onSubmit={handleCrearCalle} className="space-y-4">
-              <div>
-                <label className="block text-xs font-black uppercase text-slate-700 mb-1.5">
-                  Nombre de la Calle o Vereda
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Calle Bolívar"
-                  value={nombreNuevaCalle}
-                  onChange={(e) => setNombreNuevaCalle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase text-slate-700 mb-1.5">
-                  Sector o Punto de Referencia (Opcional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Sector Centro"
-                  value={sectorNuevaCalle}
-                  onChange={(e) => setSectorNuevaCalle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalCalle(false)}
-                  className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={procesando}
-                  className="px-5 py-2.5 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
-                >
-                  {procesando ? 'Guardando...' : 'Guardar Calle'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* VENTANA REGISTRAR JEFE DE CASA Y SU VIVIENDA */}
-      {modalFamilia && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-2xl border border-indigo-100 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">
-                  Registrar Jefe de Casa y Vivienda
-                </h3>
-                <p className="text-xs text-slate-500 font-semibold">
-                  Completa los datos de la casa y del representante principal de la familia
-                </p>
-              </div>
-              <button
-                onClick={() => setModalFamilia(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCrearFamilia} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Calle de la Vivienda
-                  </label>
-                  <select
-                    required
-                    value={formFamilia.calle_id}
-                    onChange={(e) => setFormFamilia({ ...formFamilia, calle_id: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  >
-                    <option value="">Selecciona una calle...</option>
-                    {calles.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Número o Nombre de Casa
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Casa 14-B"
-                    value={formFamilia.numero_casa}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, numero_casa: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Nombres del Jefe(a) de Casa
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: María Elena"
-                    value={formFamilia.nombres_jefe}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, nombres_jefe: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Apellidos del Jefe(a) de Casa
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Pérez Gómez"
-                    value={formFamilia.apellidos_jefe}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, apellidos_jefe: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Cédula
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: V-14500200"
-                    value={formFamilia.cedula_jefe}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, cedula_jefe: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Fecha de Nacimiento
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formFamilia.fecha_nacimiento_jefe}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, fecha_nacimiento_jefe: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Sexo
-                  </label>
-                  <select
-                    value={formFamilia.sexo_jefe}
-                    onChange={(e) => setFormFamilia({ ...formFamilia, sexo_jefe: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  >
-                    <option value="F">Femenino (F)</option>
-                    <option value="M">Masculino (M)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Teléfono de Contacto
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: 0412-0000000"
-                    value={formFamilia.telefono_contacto}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, telefono_contacto: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Estado de Salud
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Sano, Hipertensión, Diabetes..."
-                    value={formFamilia.condicion_salud_jefe}
-                    onChange={(e) =>
-                      setFormFamilia({ ...formFamilia, condicion_salud_jefe: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase text-slate-700 mb-2">
-                  Beneficios o Ayudas que Recibe
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {LISTA_BENEFICIOS.map((ben) => {
-                    const activo = formFamilia.beneficios_jefe.includes(ben);
-                    return (
-                      <button
-                        type="button"
-                        key={ben}
-                        onClick={() => toggleBeneficio(ben, true)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                          activo
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50'
-                        }`}
-                      >
-                        {ben}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalFamilia(false)}
-                  className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={procesando}
-                  className="px-6 py-2.5 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
-                >
-                  {procesando ? 'Guardando...' : 'Guardar Familia'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* VENTANA AGREGAR O EDITAR FAMILIAR */}
-      {modalHabitante && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl bg-white rounded-3xl p-6 shadow-2xl border border-indigo-100">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <h3 className="text-lg font-black text-slate-900">
-                {habitanteEditandoId ? 'Editar Datos de la Persona' : 'Agregar Familiar a la Vivienda'}
-              </h3>
-              <button
-                onClick={() => setModalHabitante(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleGuardarHabitante} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Nombres
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formHabitante.nombres}
-                    onChange={(e) =>
-                      setFormHabitante({ ...formHabitante, nombres: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Apellidos
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formHabitante.apellidos}
-                    onChange={(e) =>
-                      setFormHabitante({ ...formHabitante, apellidos: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Cédula (Opcional niños)
-                  </label>
-                  <input
-                    type="text"
-                    value={formHabitante.cedula}
-                    onChange={(e) =>
-                      setFormHabitante({ ...formHabitante, cedula: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Fecha de Nacimiento
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formHabitante.fecha_nacimiento}
-                    onChange={(e) =>
-                      setFormHabitante({ ...formHabitante, fecha_nacimiento: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Parentesco
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Hijo(a), Esposo(a), Abuelo(a)"
-                    value={formHabitante.parentesco}
-                    onChange={(e) =>
-                      setFormHabitante({ ...formHabitante, parentesco: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Sexo
-                  </label>
-                  <select
-                    value={formHabitante.sexo}
-                    onChange={(e) => setFormHabitante({ ...formHabitante, sexo: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  >
-                    <option value="F">Femenino (F)</option>
-                    <option value="M">Masculino (M)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                    Estado de Salud
-                  </label>
-                  <input
-                    type="text"
-                    value={formHabitante.condicion_salud}
-                    onChange={(e) =>
-                      setFormHabitante({ ...formHabitante, condicion_salud: e.target.value })
-                    }
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase text-slate-700 mb-2">
-                  Beneficios que Recibe
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {LISTA_BENEFICIOS.map((ben) => {
-                    const activo = formHabitante.beneficios.includes(ben);
-                    return (
-                      <button
-                        type="button"
-                        key={ben}
-                        onClick={() => toggleBeneficio(ben, false)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                          activo
-                            ? 'bg-indigo-600 text-white border-indigo-600'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50'
-                        }`}
-                      >
-                        {ben}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalHabitante(false)}
-                  className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={procesando}
-                  className="px-6 py-2.5 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
-                >
-                  {procesando ? 'Guardando...' : 'Guardar Datos'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ModalHabitante
+        abierto={modalHabitante}
+        onCerrar={() => setModalHabitante(false)}
+        onSubmit={handleGuardarHabitante}
+        form={formHabitante}
+        setForm={setFormHabitante}
+        esEdicion={Boolean(habitanteEditandoId)}
+        procesando={procesando}
+        toggleBeneficio={toggleBeneficio}
+      />
     </div>
   );
 }

@@ -14,10 +14,6 @@ import {
 } from 'lucide-react';
 import { calcularEdad } from '../../utils/calculosDemograficos';
 
-/**
- * ESPACIOS DE IMÁGENES PARA CADA BLOQUE DEL PANEL PRINCIPAL.
- * Puedes colocar imágenes diferentes en la carpeta "public/" y cambiar aquí sus nombres:
- */
 const IMAGENES_DASHBOARD = {
   cardFamilias: '/registro.png',
   cardHabitantes: '/logins.jpg',
@@ -33,7 +29,6 @@ export default function DashboardView({
   busquedaGlobal = '',
   irACalles,
 }) {
-  // Buscador propio de la tabla inferior (funciona en conjunto con el buscador de arriba)
   const [busquedaTabla, setBusquedaTabla] = useState('');
   const [filtroCalle, setFiltroCalle] = useState('TODAS');
 
@@ -43,10 +38,8 @@ export default function DashboardView({
     (h) => Array.isArray(h.beneficios) && h.beneficios.length > 0
   ).length;
 
-  // Une lo que se escriba en el buscador de arriba o en el buscador de abajo
   const textoBusqueda = (busquedaTabla || busquedaGlobal).trim().toLowerCase();
 
-  // Filtra los habitantes según el texto buscado y la calle seleccionada
   const habitantesFiltrados = habitantes.filter((h) => {
     const nombreCalle = h.familias?.calles?.nombre || '';
     if (filtroCalle !== 'TODAS' && nombreCalle !== filtroCalle) {
@@ -74,7 +67,6 @@ export default function DashboardView({
     );
   });
 
-  // También filtra las tarjetas de Jefes de Casa cuando se busca algo
   const familiasFiltradas = familias.filter((fam) => {
     if (!textoBusqueda) return true;
     const jefe =
@@ -99,19 +91,22 @@ export default function DashboardView({
 
   return (
     <div className="space-y-6">
-      {/* AVISO VERDE CUANDO HAY UNA BÚSQUEDA ACTIVA */}
       {textoBusqueda && (
-        <div className="p-4 bg-emerald-100 border-2 border-emerald-500 text-emerald-950 rounded-2xl flex items-center justify-between shadow-sm">
+        <div className="p-4 bg-emerald-100 border-2 border-emerald-500 text-emerald-950 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
           <div className="flex items-center gap-3">
             <CheckCircle2 size={20} className="text-emerald-700 shrink-0" />
             <p className="text-sm font-extrabold">
-              Mostrando resultados para: <span className="underline">&ldquo;{busquedaTabla || busquedaGlobal}&rdquo;</span> ({habitantesFiltrados.length} vecinos encontrados)
+              Mostrando resultados para:{' '}
+              <span className="underline">
+                &ldquo;{busquedaTabla || busquedaGlobal}&rdquo;
+              </span>{' '}
+              ({habitantesFiltrados.length} vecinos encontrados)
             </p>
           </div>
           {busquedaTabla && (
             <button
               onClick={() => setBusquedaTabla('')}
-              className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 cursor-pointer self-end sm:self-auto"
             >
               Ver todos
             </button>
@@ -119,15 +114,14 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* 1. TARJETAS SUPERIORES CON TIPOGRAFÍA MÁS GRANDE */}
-      <div className="grid grid-cols-3 gap-5">
-        {/* Tarjeta 1: Total Familias */}
-        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
+      {/* 1. TARJETAS SUPERIORES ADAPTABLES (1 COLUMNA EN MÓVIL, 3 EN PC) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+        <div className="bg-white rounded-[26px] p-5 sm:p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
           <div>
             <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
               <Home size={14} /> Hogares
             </span>
-            <h3 className="text-4xl font-black text-slate-900 mt-2.5 leading-none">
+            <h3 className="text-3xl sm:text-4xl font-black text-slate-900 mt-2.5 leading-none">
               {totalFamilias}
             </h3>
             <p className="text-base font-extrabold text-slate-800 mt-1.5">
@@ -138,7 +132,7 @@ export default function DashboardView({
             </p>
           </div>
 
-          <div className="w-22 h-22 rounded-2xl bg-gradient-to-br from-indigo-50 to-[#EFD0ED]/50 border border-indigo-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-50 to-[#EFD0ED]/50 border border-indigo-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
             <img
               src={IMAGENES_DASHBOARD.cardFamilias}
               alt="Familias"
@@ -147,13 +141,12 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Tarjeta 2: Total Habitantes */}
-        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
+        <div className="bg-white rounded-[26px] p-5 sm:p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
           <div>
             <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-purple-600 bg-purple-50 px-3 py-1 rounded-lg">
               <Users size={14} /> Vecinos
             </span>
-            <h3 className="text-4xl font-black text-slate-900 mt-2.5 leading-none">
+            <h3 className="text-3xl sm:text-4xl font-black text-slate-900 mt-2.5 leading-none">
               {totalHabitantes}
             </h3>
             <p className="text-base font-extrabold text-slate-800 mt-1.5">
@@ -164,7 +157,7 @@ export default function DashboardView({
             </p>
           </div>
 
-          <div className="w-22 h-22 rounded-2xl bg-gradient-to-br from-purple-50 to-[#EFD0ED]/60 border border-purple-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-50 to-[#EFD0ED]/60 border border-purple-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
             <img
               src={IMAGENES_DASHBOARD.cardHabitantes}
               alt="Habitantes"
@@ -173,13 +166,12 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Tarjeta 3: Reciben Beneficios */}
-        <div className="bg-white rounded-[26px] p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
+        <div className="bg-white rounded-[26px] p-5 sm:p-6 shadow-sm border border-indigo-100/80 flex items-center justify-between hover:shadow-md transition">
           <div>
             <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
               <Gift size={14} /> Ayudas y Entregas
             </span>
-            <h3 className="text-4xl font-black text-slate-900 mt-2.5 leading-none">
+            <h3 className="text-3xl sm:text-4xl font-black text-slate-900 mt-2.5 leading-none">
               {totalConBeneficios}
             </h3>
             <p className="text-base font-extrabold text-slate-800 mt-1.5">
@@ -190,7 +182,7 @@ export default function DashboardView({
             </p>
           </div>
 
-          <div className="w-22 h-22 rounded-2xl bg-gradient-to-br from-blue-50 to-[#EFD0ED]/50 border border-blue-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-50 to-[#EFD0ED]/50 border border-blue-100 p-2.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
             <img
               src={IMAGENES_DASHBOARD.cardBeneficios}
               alt="Beneficios"
@@ -200,23 +192,22 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* 2. FILA CENTRAL: JEFES DE CASA + TARJETA DE RESUMEN COMUNAL */}
-      <div className="grid grid-cols-3 gap-5">
-        {/* Columna Izquierda (2/3): Jefes de Casa Registrados */}
-        <div className="col-span-2 bg-white rounded-[28px] p-6 shadow-sm border border-indigo-100/80 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
+      {/* 2. FILA CENTRAL ADAPTABLE */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 bg-white rounded-[28px] p-5 sm:p-6 shadow-sm border border-indigo-100/80 flex flex-col justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-lg font-black text-slate-900">
+              <h2 className="text-base sm:text-lg font-black text-slate-900">
                 Jefes de Casa Registrados Recientemente
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">
                 Familias anotadas en cada calle de la comunidad
               </p>
             </div>
 
             <button
               onClick={irACalles}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer shrink-0"
             >
               <span>Ver y Registrar Familias</span>
               <ArrowUpRight size={16} />
@@ -224,8 +215,8 @@ export default function DashboardView({
           </div>
 
           {familiasRecientes.length === 0 ? (
-            <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-[#EFD0ED]/25 p-6 flex items-center justify-center gap-5">
-              <div className="w-18 h-18 rounded-2xl bg-white p-3 shadow-sm border border-indigo-100 shrink-0 flex items-center justify-center">
+            <div className="flex-1 rounded-2xl border-2 border-dashed border-indigo-100 bg-gradient-to-br from-indigo-50/40 to-[#EFD0ED]/25 p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-center gap-4 text-center sm:text-left">
+              <div className="w-16 h-16 rounded-2xl bg-white p-3 shadow-sm border border-indigo-100 shrink-0 flex items-center justify-center">
                 <img
                   src={IMAGENES_DASHBOARD.estadoVacioFamilias}
                   alt="Sin registros"
@@ -233,16 +224,16 @@ export default function DashboardView({
                 />
               </div>
               <div>
-                <p className="text-base font-black text-indigo-950">
+                <p className="text-sm sm:text-base font-black text-indigo-950">
                   Todavía no hay familias registradas.
                 </p>
-                <p className="text-sm text-slate-600 font-medium mt-1">
-                  Haz clic en el botón &ldquo;Ver y Registrar Familias&rdquo; para anotar al primer Jefe de Casa.
+                <p className="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+                  Haz clic en &ldquo;Ver y Registrar Familias&rdquo; para anotar al primer Jefe de Casa.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 my-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 my-auto">
               {familiasRecientes.map((fam) => {
                 const jefe =
                   (fam.habitantes || []).find((h) => h.es_jefe_familia) ||
@@ -250,10 +241,10 @@ export default function DashboardView({
                 return (
                   <div
                     key={fam.id}
-                    className="p-4 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/60 border border-slate-200 flex items-center justify-between transition"
+                    className="p-4 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/60 border border-slate-200 flex items-center justify-between gap-2 transition"
                   >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0">
                         <UserCheck size={18} />
                       </div>
                       <div className="min-w-0">
@@ -268,8 +259,8 @@ export default function DashboardView({
                         </p>
                       </div>
                     </div>
-                    <span className="px-3 py-1 rounded-lg bg-white border border-indigo-100 text-xs font-black text-indigo-700 shrink-0">
-                      {(fam.habitantes || []).length} integrantes
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-100 text-xs font-black text-indigo-700 shrink-0">
+                      {(fam.habitantes || []).length} hab.
                     </span>
                   </div>
                 );
@@ -278,7 +269,6 @@ export default function DashboardView({
           )}
         </div>
 
-        {/* Columna Derecha (1/3): RESUMEN COMUNAL */}
         <div
           className="rounded-[28px] p-6 text-white shadow-lg flex flex-col justify-between relative overflow-hidden border border-white/60"
           style={{
@@ -295,7 +285,7 @@ export default function DashboardView({
           </div>
 
           <div className="my-4 flex flex-col items-center text-center relative z-10">
-            <div className="w-30 h-24 rounded-2xl bg-white/95 backdrop-blur-md p-2.5 shadow-md border border-white flex items-center justify-center overflow-hidden mb-3">
+            <div className="w-28 h-24 rounded-2xl bg-white/95 backdrop-blur-md p-2.5 shadow-md border border-white flex items-center justify-center overflow-hidden mb-3">
               <img
                 src={IMAGENES_DASHBOARD.resumenComunal}
                 alt="Resumen Comunal"
@@ -339,9 +329,9 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* 3. LISTA GENERAL DE VECINOS CON BUSCADOR FUNCIONAL INTEGRADO */}
-      <div className="bg-white rounded-[28px] p-6 shadow-sm border border-indigo-100/80">
-        <div className="flex items-center justify-between gap-4 mb-5">
+      {/* 3. LISTA GENERAL DE VECINOS ADAPTABLE */}
+      <div className="bg-white rounded-[28px] p-5 sm:p-6 shadow-sm border border-indigo-100/80">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div className="flex items-center gap-3.5">
             <div
               className="w-11 h-11 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0"
@@ -352,10 +342,10 @@ export default function DashboardView({
               <FileSpreadsheet size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-900">
+              <h2 className="text-base sm:text-lg font-black text-slate-900">
                 Lista General de Vecinos ({habitantesFiltrados.length} personas)
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">
                 Todos los Jefes de Casa y familiares registrados en la comunidad
               </p>
             </div>
@@ -363,22 +353,22 @@ export default function DashboardView({
 
           <button
             onClick={irACalles}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer shrink-0"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition cursor-pointer shrink-0"
           >
             <Plus size={16} />
             <span>Agregar o Editar en Calles</span>
           </button>
         </div>
 
-        {/* BUSCADOR INFERIOR Y FILTRO POR CALLE 100% FUNCIONALES */}
-        <div className="flex items-center gap-4 mb-5 bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-100">
+        {/* BUSCADOR INFERIOR Y FILTRO POR CALLE */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-5 bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-100">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-4 top-3.5 text-indigo-500" />
             <input
               type="text"
               value={busquedaTabla}
               onChange={(e) => setBusquedaTabla(e.target.value)}
-              placeholder="Escribe aquí para buscar vecino por nombre, apellido, cédula, calle, casa o beneficio..."
+              placeholder="Escribe aquí para buscar vecino por nombre, cédula, calle o beneficio..."
               className="w-full bg-white border border-indigo-200 rounded-xl pl-11 pr-10 py-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-600 transition"
             />
             {busquedaTabla && (
@@ -406,7 +396,7 @@ export default function DashboardView({
         </div>
 
         <div className="overflow-x-auto rounded-2xl border border-indigo-100">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[680px] text-left border-collapse">
             <thead>
               <tr
                 className="text-white text-xs font-black uppercase tracking-wider"
